@@ -1,5 +1,6 @@
 #include <iostream>
 #include <map>
+#include <queue>
 #include <boost/variant.hpp>
 
 using namespace std;
@@ -11,7 +12,7 @@ enum class ProcedurePolicyAction
     queue
 };
 
-enum class IncomingEvent
+enum class IncomingMessageName
 {
     e1SetupReq,
 	e1ResetReq,
@@ -28,11 +29,11 @@ enum class Procedure
 	f1Reset
 };
 
-using IncomingEventToProcedureMap = std::map<IncomingEvent, Procedure>;
-using ConcurrentProcedure = std::pair<Procedure, IncomingEvent>;
+using IncomingEventToProcedureMap = std::map<IncomingMessageName, Procedure>;
+using ConcurrentProcedure = std::pair<Procedure, IncomingMessageName>;
 using ProcedurePolicy = std::map<ConcurrentProcedure, ProcedurePolicyAction>;
 
-template<typename TProcess, typename TIgnore>
+template<typename TProcess, typename TIgnore, typename TMessage>
 class ConcurrentHandlingFramework
 {
 public:
@@ -42,11 +43,11 @@ public:
 								concurrentPolicy(policy)
 	{}
 
-    ProcedurePolicyAction getPolicyAction(IncomingEvent event)
+    ProcedurePolicyAction getPolicyAction(IncomingMessageName messageName)
     {
         if(Procedure::none == activeProcedure)
         {
-      	    const auto procedureIterator = incomingEventToProcedureMap.find(event);
+      	    const auto procedureIterator = incomingEventToProcedureMap.find(messageName);
 		    if (procedureIterator != incomingEventToProcedureMap.end())
 		    {
 			    activeProcedure = procedureIterator->second;				
@@ -57,7 +58,7 @@ public:
         } 
         else
         {
-       	    const auto actionIterator = concurrentPolicy.find(std::make_pair(activeProcedure, event));
+       	    const auto actionIterator = concurrentPolicy.find(std::make_pair(activeProcedure, messageName));
 		    if (actionIterator != concurrentPolicy.end())
             {
        	      cout << "action: " << (int)actionIterator->second << endl;
@@ -67,10 +68,10 @@ public:
         }
     };
 	
-    template <typename TMessage>
-    void handleParallelProcedureEvent(TMessage message, IncomingEvent event)
+    //template <typename TMessage>
+    void handleParallelProcedureEvent(TMessage message, IncomingMessageName messageName)
     {
-    	ProcedurePolicyAction action = getPolicyAction(event);
+    	ProcedurePolicyAction action = getPolicyAction(messageName);
 
     	switch(action)
 		{
@@ -80,17 +81,33 @@ public:
 			case ProcedurePolicyAction::ignore:
                 boost::apply_visitor(ignore, message);
 				break;
+		    case ProcedurePolicyAction::queue:
+			    cout << "queue " << endl;
+			    parallelProcedureQueue.push(std::make_pair(message,messageName));
 			default:
 			    break;
     	}
     };
 
+	void markProcedureComplete()
+	{
+		activeProcedure = Procedure::none;
+		if (not parallelProcedureQueue.empty())
+        {
+            auto queuedEvent = parallelProcedureQueue.front();
+            parallelProcedureQueue.pop();
+            handleParallelProcedureEvent(queuedEvent.first, queuedEvent.second);
+        }
+	};
+	
     TProcess process{};
 	TIgnore ignore{};
 
     Procedure activeProcedure = Procedure::none;
     IncomingEventToProcedureMap incomingEventToProcedureMap;
     ProcedurePolicy concurrentPolicy;
+	
+	std::queue<std::pair<TMessage,IncomingMessageName>> parallelProcedureQueue;
 };
 
 
