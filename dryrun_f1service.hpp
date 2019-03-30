@@ -6,7 +6,7 @@ struct F1SetupReq
 {
     int head;
 };
-using VarF1Message = boost::variant<F1SetupReq>;
+using F1ProcessableMessage = boost::variant<F1SetupReq>;
 
 class F1_Process : public boost::static_visitor<void>
 {

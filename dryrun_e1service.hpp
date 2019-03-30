@@ -10,7 +10,7 @@ struct E1ResetReq
     int head;
 };
 
-using VarE1Message = boost::variant<E1SetupReq, E1ResetReq>;
+using E1ProcessableMessage = boost::variant<E1SetupReq, E1ResetReq>;
 
 class E1_Process : public boost::static_visitor<void>
 {
